@@ -49,9 +49,13 @@ public class TargetLauncher {
                     new InputStreamReader(proceso.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = r.readLine()) != null) {
+                    // Ocultar el ruido del arranque del debugger
+                    if (line.startsWith("Listening for transport")) {
+                        continue;
+                    }
                     onLine.accept(line);
-                    // Reflejo en consola (útil para depurar y para el modo interactivo)
-                    System.out.println("[prog] " + line);
+                    // Reflejo directo en consola (el programa "se ve" en la terminal)
+                    System.out.println(line);
                 }
             } catch (IOException ignored) {
                 // proceso terminado

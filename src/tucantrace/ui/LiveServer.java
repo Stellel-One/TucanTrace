@@ -129,7 +129,6 @@ public class LiveServer implements AutoCloseable {
 
         BlockingQueue<String> cola = new LinkedBlockingQueue<>();
         clientes.add(cola);
-        System.out.println("[LiveServer] Navegador conectado (" + clientes.size() + " activo/s)");
 
         try (OutputStream os = ex.getResponseBody()) {
             // Comentario inicial para abrir el stream
@@ -147,7 +146,6 @@ public class LiveServer implements AutoCloseable {
             // Navegador desconectado: normal
         } finally {
             clientes.remove(cola);
-            System.out.println("[LiveServer] Navegador desconectado (" + clientes.size() + " activo/s)");
         }
     }
 

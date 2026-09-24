@@ -30,11 +30,18 @@ public class Main {
     private static final String DEFAULT_HOST = "localhost";
     private static final int DEFAULT_PORT = 5005;
 
+    /** Modo silencioso: menos salida técnica (para el modo interactivo). */
+    private static boolean quiet = false;
+
+    /** Imprime solo si no estamos en modo silencioso. */
+    private static void log(String s) {
+        if (!quiet) {
+            System.out.println(s);
+        }
+    }
+
     public static void main(String[] args) {
-        System.out.println("=========================================================");
-        System.out.println("  TUCANTRACE v0.1 - Live UML Visualization for Java     ");
-        System.out.println("  Universidad de la Amazonia - Ingeniería de Sistemas   ");
-        System.out.println("=========================================================\n");
+        // (La bienvenida se imprime después de leer los argumentos, salvo en modo --quiet)
 
         // 1. Argumentos
         String sourceDir = DEFAULT_SOURCE;
@@ -59,20 +66,27 @@ public class Main {
                 case "--exec" -> { if (i + 1 < args.length) execMain = args[++i]; }
                 case "--exec-cp" -> { if (i + 1 < args.length) execCp = args[++i]; }
                 case "--keep-alive" -> { if (i + 1 < args.length) keepAlive = Long.parseLong(args[++i]); }
+                case "--quiet" -> quiet = true;
                 default -> sourceDir = args[i];
             }
         }
 
-        System.out.println("Directorio de código fuente: " + sourceDir);
-        System.out.println("Modo JDI en vivo: " + (enableJDI ? "SÍ (" + host + ":" + port + ")" : "NO"));
-        System.out.println("Visor navegador: " + (live ? "SÍ (puerto " + httpPort + ")" : "NO"));
-        if (execMain != null) {
-            System.out.println("Programa a ejecutar: " + execMain + "  [cp: " + execCp + "]");
+        if (!quiet) {
+            System.out.println("=========================================================");
+            System.out.println("  TUCANTRACE v0.1 - Live UML Visualization for Java     ");
+            System.out.println("  Universidad de la Amazonia - Ingeniería de Sistemas   ");
+            System.out.println("=========================================================\n");
+            System.out.println("Directorio de código fuente: " + sourceDir);
+            System.out.println("Modo JDI en vivo: " + (enableJDI ? "SÍ (" + host + ":" + port + ")" : "NO"));
+            System.out.println("Visor navegador: " + (live ? "SÍ (puerto " + httpPort + ")" : "NO"));
+            if (execMain != null) {
+                System.out.println("Programa a ejecutar: " + execMain + "  [cp: " + execCp + "]");
+            }
+            System.out.println();
         }
-        System.out.println();
 
         // 2. Análisis estático: código → UML
-        System.out.println("--- 1. Análisis estático (JavaParser → PlantUML) ---");
+        log("--- 1. Análisis estático (JavaParser → PlantUML) ---");
         String plantUML;
         String rootPackage;
         try {
@@ -85,30 +99,32 @@ public class Main {
 
             JavaParserAdapter parser = new JavaParserAdapter();
             List<JavaParserAdapter.UMLClassInfo> classes = parser.extractClassInfo(parser.parseProject(srcPath));
-            System.out.println("  Clases parseadas: " + classes.size());
-            for (JavaParserAdapter.UMLClassInfo c : classes) {
-                System.out.println("    · " + c.name
-                        + "  [" + c.attributes.size() + " atributos, "
-                        + c.methods.size() + " métodos]"
-                        + (c.extendsTypes.isEmpty() ? "" : "  extiende " + c.extendsTypes));
+            log("  Clases parseadas: " + classes.size());
+            if (!quiet) {
+                for (JavaParserAdapter.UMLClassInfo c : classes) {
+                    System.out.println("    · " + c.name
+                            + "  [" + c.attributes.size() + " atributos, "
+                            + c.methods.size() + " métodos]"
+                            + (c.extendsTypes.isEmpty() ? "" : "  extiende " + c.extendsTypes));
+                }
             }
 
             PlantUMLGenerator generator = new PlantUMLGenerator();
             plantUML = generator.generate(classes);
-            System.out.println("  PlantUML generado: " + plantUML.length() + " caracteres");
+            log("  PlantUML generado: " + plantUML.length() + " caracteres");
 
             Path pumlOut = Paths.get("build/tucantrace-diagram.puml");
             generator.saveToFile(plantUML, pumlOut.toString());
-            System.out.println("  [OK] Diagrama guardado: " + pumlOut.toAbsolutePath());
+            log("  [OK] Diagrama guardado: " + pumlOut.toAbsolutePath());
 
             // Intentar renderizar SVG (si PlantUML lo permite sin GraphViz)
             try {
                 Path svgOut = Paths.get("build/tucantrace-diagram.svg");
                 java.nio.file.Files.createDirectories(svgOut.getParent());
                 java.nio.file.Files.writeString(svgOut, generator.generateSVG(plantUML));
-                System.out.println("  [OK] SVG renderizado: " + svgOut.toAbsolutePath());
+                log("  [OK] SVG renderizado: " + svgOut.toAbsolutePath());
             } catch (Throwable t) {
-                System.out.println("  [!] No se pudo renderizar SVG: " + t.getMessage());
+                log("  [!] No se pudo renderizar SVG: " + t.getMessage());
             }
 
             rootPackage = commonPackagePrefix(classes);
@@ -166,7 +182,6 @@ public class Main {
     private static void runLiveViewer(String plantUML, String rootPackage,
                                       String host, int jdiPort, int httpPort, long delay,
                                       String execMain, String execCp, long keepAlive) {
-        System.out.println("\n--- 2. Visor en vivo (navegador) ---");
         if (execMain == null) {
             System.err.println("[X] El modo --live requiere --exec <clase> [--exec-cp <cp>].");
             return;
@@ -181,31 +196,30 @@ public class Main {
                         session, host, jdiPort, rootPackage, execMain, execCp);
                 session.setRunHandler(controller::ejecutarAsync);
 
-                System.out.println("  Programa  : " + execMain + "  [cp: " + execCp + "]");
-                System.out.println("  Visor UML : " + session.getUrl());
-                System.out.println("  Terminal  : " + session.getUrlTerminal());
+                log("\n--- 2. Visor en vivo (navegador) ---");
+                log("  Programa  : " + execMain + "  [cp: " + execCp + "]");
+                log("  Visor UML : " + session.getUrl());
+                log("  Terminal  : " + session.getUrlTerminal());
                 session.abrirDosPestanas();
 
                 // Esperar al navegador (hasta 12s)
                 for (int i = 0; i < 48 && !session.hayNavegador(); i++) {
                     Thread.sleep(250);
                 }
-                System.out.println(session.hayNavegador()
-                        ? "  [OK] Navegador conectado."
-                        : "  [!] Sin navegador; se transmite igual.");
+                log(session.hayNavegador() ? "  [OK] Navegador conectado." : "  [!] Sin navegador.");
 
-                // Primera ejecucion
+                // Guía clara para el usuario (esto es lo importante)
+                guiaConsola();
+
+                // Primera ejecución
                 controller.ejecutarAsync();
 
                 // Mantener el servidor vivo para re-ejecutar desde el navegador
-                System.out.println("\n  [OK] Servidor activo. Usa el boton 'Ejecutar de nuevo' en la terminal.");
                 if (keepAlive <= 0) {
-                    System.out.println("  Ctrl+C para salir.\n");
                     while (true) {
                         Thread.sleep(1000);
                     }
                 } else {
-                    System.out.println("  Se cerrara en " + keepAlive + "s.\n");
                     Thread.sleep(keepAlive * 1000);
                 }
             } finally {
@@ -217,6 +231,36 @@ public class Main {
             System.err.println("[X] Error en el visor: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Imprime una guía clara para que el usuario sepa qué escribir en la consola.
+     */
+    private static void guiaConsola() {
+        System.out.println();
+        System.out.println("########################################################################");
+        System.out.println("#                                                                      #");
+        System.out.println("#                   >>>   ESCRIBI EN ESTA VENTANA   <<<                #");
+        System.out.println("#                                                                      #");
+        System.out.println("#   El programa ya arrancó y espera que le escribas ABAJO.             #");
+        System.out.println("#   Escribí el número y presioná ENTER.                                 #");
+        System.out.println("#                                                                      #");
+        System.out.println("#     >>>  EMPEZÁ ESCRIBIENDO:   1   y ENTER                          #");
+        System.out.println("#          (registra al estudiante)                                    #");
+        System.out.println("#          Luego responde: nombre, cédula, teléfono, correo, código    #");
+        System.out.println("#                                                                      #");
+        System.out.println("#   Menú rápido (escribí el número + ENTER):                           #");
+        System.out.println("#     1 = registrar estudiante    2 = registrar motorista + moto       #");
+        System.out.println("#     3 = pedir viaje             4 = aceptar viaje                    #");
+        System.out.println("#     5 = iniciar viaje           6 = finalizar viaje                  #");
+        System.out.println("#     7 = reportar pago           8 = confirmar pago                   #");
+        System.out.println("#     9 = calificar              10 = ver estado                       #");
+        System.out.println("#     0 = salir                                                        #");
+        System.out.println("#                                                                      #");
+        System.out.println("#   Mientras escribís, mirá el NAVEGADOR: el UML se ilumina en vivo.   #");
+        System.out.println("#                                                                      #");
+        System.out.println("########################################################################");
+        System.out.println();
     }
 
     /**

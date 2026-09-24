@@ -65,8 +65,6 @@ public class JDIClient implements AutoCloseable {
         arguments.get("port").setValue(String.valueOf(this.port));
 
         this.vm = connector.attach(arguments);
-        System.out.println("✅ JDI conectado a " + host + ":" + port);
-        System.out.println("   Filtro de clases: " + (classFilter.isEmpty() ? "(todas)" : classFilter + ".*"));
 
         EventRequestManager erm = vm.eventRequestManager();
 
