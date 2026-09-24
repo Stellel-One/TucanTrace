@@ -37,7 +37,13 @@ public class LiveServer implements AutoCloseable {
         this.umlPage = umlPage;
         this.terminalPage = terminalPage;
         this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", puerto), 0);
-        this.server.setExecutor(Executors.newCachedThreadPool());
+        // Hilos daemon: no impiden que la JVM termine (los handlers SSE quedan
+        // bloqueados esperando eventos y si fueran no-daemon colgarían el cierre).
+        this.server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r);
+            t.setDaemon(true);
+            return t;
+        }));
         this.server.createContext("/", this::handleIndex);
         this.server.createContext("/terminal", this::handleTerminal);
         this.server.createContext("/events", this::handleEvents);

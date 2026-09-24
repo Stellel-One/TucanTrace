@@ -38,6 +38,10 @@ public class TargetLauncher {
 
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
+        // El programa objetivo hereda la ENTRADA de esta consola, para que el
+        // usuario pueda escribir (prototipo interactivo) mientras su salida se
+        // captura y se transmite al navegador.
+        pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
         this.proceso = pb.start();
 
         this.hiloSalida = new Thread(() -> {
@@ -46,6 +50,8 @@ public class TargetLauncher {
                 String line;
                 while ((line = r.readLine()) != null) {
                     onLine.accept(line);
+                    // Reflejo en consola (útil para depurar y para el modo interactivo)
+                    System.out.println("[prog] " + line);
                 }
             } catch (IOException ignored) {
                 // proceso terminado

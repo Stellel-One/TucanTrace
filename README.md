@@ -222,6 +222,27 @@ Ejecuta el programa del estudiante y **lo visualiza en vivo** en el navegador:
 | `--port <n>` | 5005 | Puerto JDWP (debug) del programa |
 | `--keep-alive <s>` | -1 | Segundos antes de cerrar; `-1` = no cerrar nunca |
 
+### Modo interactivo (prototipo de TucanGo dentro del visor)
+
+Corre el **prototipo interactivo** de TucanGo (`PrototipoInteractivo`) y lo visualiza en vivo:
+**escribís en la consola** y el UML se ilumina en el navegador mientras el programa responde.
+
+```powershell
+# Lanzador de doble clic:
+.\scripts\live-interactivo.bat
+```
+
+El programa objetivo **hereda tu teclado** (stdin) y su salida se transmite al navegador.
+Requiere que el proyecto TucanGo esté compilado en `..\PROYECTO LOGICA II\build`.
+
+```
+# Manualmente:
+java -Dfile.encoding=UTF-8 -cp "build/classes;lib/*" tucantrace.Main ^
+  --live --delay 0 --http-port 8077 --port 5005 ^
+  --exec co.edu.uniamazonia.logica2.PrototipoInteractivo ^
+  --exec-cp "..\PROYECTO LOGICA II\build" "..\PROYECTO LOGICA II\src"
+```
+
 ### Qué se ve
 
 ```
