@@ -180,6 +180,81 @@ Start-Process $java -ArgumentList @(
 
 ---
 
+## 🖥️ Prototipo interactivo (scanner + menú) — NUEVO
+
+Clase `tucantrace.InteractivePrototype`: menú por consola que permite usar el **scanner** de código paso a paso.
+
+```
+#####################################################
+#   TUCANTRACE  -  Prototipo Interactivo  (v0.2)    #
+#####################################################
+-----------------------------------------------------
+  MENU PRINCIPAL   [proyecto cargado: 12 clases]
+-----------------------------------------------------
+  1. Escanear proyecto Java (codigo -> estructura)
+  2. Ver detalle de una clase
+  3. Validar estandares del curso (Guias 1 y 2)
+  4. Generar diagrama UML (.puml + .svg)
+  5. Trazar ejecucion en vivo (JDI)
+  0. Salir
+  Opcion >
+```
+
+### Qué hace cada opción
+
+| Opción | Función |
+|--------|---------|
+| **1. Escanear** | Pide la ruta, parsea el proyecto y lista clases con nº de atributos, métodos y herencia |
+| **2. Ver detalle** | Muestra atributos (con visibilidad y tipo) y métodos de una clase concreta |
+| **3. Validar estándares** | Verifica el código contra las **Guías 1 y 2**: UpperCamelCase, `private`/`public`, lowerCamelCase, tipos, y agrupa los accesores get/set |
+| **4. Generar diagrama** | Exporta `.puml` + `.svg` del modelo completo |
+| **5. Trazar en vivo** | Se conecta por JDI y muestra `[ENTER]`, `[EXIT]` y `[CAMPO]` en tiempo real |
+
+### Ejecutar el prototipo interactivo
+
+```powershell
+# Con el script de Ant (recomendado)
+.\scripts\ant.ps1 interactive
+
+# O directo con java
+& $java "-Dfile.encoding=UTF-8" "-cp" "build/classes;lib/*" "tucantrace.InteractivePrototype"
+```
+
+### Ejemplo de salida (opción 3 — validación)
+
+```
+ADVERTENCIAS (6):
+  [!] Viaje.estado -> Tipo 'EstadoViaje' fuera de los sugeridos...
+  [!] Calificacion.validarPuntaje() -> Metodo no publico...
+
+ACCESORES get/set/is (67) — no cuentan como responsabilidades de negocio (Guia 2):
+  - Viaje: 15
+  - Moto: 14
+  - Pago: 12
+  ...
+-----------------------------------------------------
+Resumen: 12 conformes | 73 advertencias | 0 errores
+[!] Sin errores. Las advertencias son de estilo, no bloquean.
+```
+
+---
+
+## 🛠️ Usar Ant sin instalación global
+
+La distribución oficial de Ant no está en los mirrors CDN (versión retirada). El repo incluye un script que descarga los jars de Ant desde Maven Central y los cachea:
+
+```powershell
+.\scripts\ant.ps1 compile       # compila
+.\scripts\ant.ps1 interactive   # prototipo interactivo
+.\scripts\ant.ps1 run           # demo scripted
+.\scripts\ant.ps1 jar           # empaqueta dist/TucanTrace.jar
+.\scripts\ant.ps1 clean compile # limpia y compila
+```
+
+> En **NetBeans**, Ant viene integrado: basta `File → Open Project` sobre la carpeta y `Right-click → Build/Run`. No hace falta el script.
+
+---
+
 ## 🔧 Configuración de ejecución en NetBeans (para el agente)
 
 En `Project Properties → Run → VM Options` agregar:

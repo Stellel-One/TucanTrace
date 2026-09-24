@@ -213,21 +213,21 @@ public class JDIClient implements AutoCloseable {
         public String describe() {
             if (event instanceof MethodEntryEvent e) {
                 Method m = e.method();
-                return "▶ ENTER  " + m.declaringType().name() + "." + m.name() + "()";
+                return "[ENTER] " + m.declaringType().name() + "." + m.name() + "()";
             }
             if (event instanceof MethodExitEvent e) {
                 Method m = e.method();
-                return "◀ EXIT   " + m.declaringType().name() + "." + m.name() + "()";
+                return "[EXIT]  " + m.declaringType().name() + "." + m.name() + "()";
             }
             if (event instanceof ModificationWatchpointEvent e) {
-                return "✎ CAMPO  " + e.field().declaringType().name()
+                return "[CAMPO] " + e.field().declaringType().name()
                         + "." + e.field().name()
-                        + "  →  " + e.valueToBe();
+                        + "  =  " + e.valueToBe();
             }
             if (event instanceof ClassPrepareEvent e) {
-                return "◆ CLASE  " + e.referenceType().name() + " cargada";
+                return "[CLASE] " + e.referenceType().name() + " cargada";
             }
-            return "· " + event.getClass().getSimpleName();
+            return "[...] " + event.getClass().getSimpleName();
         }
     }
 }
