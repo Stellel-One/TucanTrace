@@ -191,6 +191,10 @@ Ejecuta el programa del estudiante y **lo visualiza en vivo** en el navegador:
 
 ### Cómo ejecutarlo
 
+**Opción rápida (lanzador):** hacé doble clic en `scripts/live.bat` (o ejecutalo) — compila si hace falta, abre las dos pestañas y deja el visor corriendo.
+
+**Opción manual:**
+
 ```powershell
 # Compilar TucanTrace
 .\scripts\ant.ps1 compile
