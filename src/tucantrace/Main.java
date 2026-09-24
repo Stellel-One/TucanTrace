@@ -3,6 +3,8 @@ package tucantrace;
 import tucantrace.parser.JavaParserAdapter;
 import tucantrace.parser.PlantUMLGenerator;
 import tucantrace.runtime.JDIClient;
+import tucantrace.ui.LiveController;
+import tucantrace.ui.LiveSession;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -37,20 +39,36 @@ public class Main {
         // 1. Argumentos
         String sourceDir = DEFAULT_SOURCE;
         boolean enableJDI = false;
+        boolean live = false;
         String host = DEFAULT_HOST;
         int port = DEFAULT_PORT;
+        int httpPort = 8077;
+        long delay = 150;
+        String execMain = null;
+        String execCp = null;
+        long keepAlive = -1; // segundos; <= 0 = mantener vivo indefinidamente
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--jdi" -> enableJDI = true;
+                case "--live" -> { live = true; enableJDI = true; }
                 case "--host" -> { if (i + 1 < args.length) host = args[++i]; }
                 case "--port" -> { if (i + 1 < args.length) port = Integer.parseInt(args[++i]); }
+                case "--http-port" -> { if (i + 1 < args.length) httpPort = Integer.parseInt(args[++i]); }
+                case "--delay" -> { if (i + 1 < args.length) delay = Long.parseLong(args[++i]); }
+                case "--exec" -> { if (i + 1 < args.length) execMain = args[++i]; }
+                case "--exec-cp" -> { if (i + 1 < args.length) execCp = args[++i]; }
+                case "--keep-alive" -> { if (i + 1 < args.length) keepAlive = Long.parseLong(args[++i]); }
                 default -> sourceDir = args[i];
             }
         }
 
         System.out.println("Directorio de código fuente: " + sourceDir);
         System.out.println("Modo JDI en vivo: " + (enableJDI ? "SÍ (" + host + ":" + port + ")" : "NO"));
+        System.out.println("Visor navegador: " + (live ? "SÍ (puerto " + httpPort + ")" : "NO"));
+        if (execMain != null) {
+            System.out.println("Programa a ejecutar: " + execMain + "  [cp: " + execCp + "]");
+        }
         System.out.println();
 
         // 2. Análisis estático: código → UML
@@ -60,7 +78,7 @@ public class Main {
         try {
             Path srcPath = Paths.get(sourceDir).toAbsolutePath().normalize();
             if (!srcPath.toFile().exists()) {
-                System.err.println("❌ Directorio no encontrado: " + srcPath);
+                System.err.println("[X] Directorio no encontrado: " + srcPath);
                 System.err.println("Uso: java tucantrace.Main [directorio-fuente] [--jdi]");
                 return;
             }
@@ -81,36 +99,41 @@ public class Main {
 
             Path pumlOut = Paths.get("build/tucantrace-diagram.puml");
             generator.saveToFile(plantUML, pumlOut.toString());
-            System.out.println("  ✅ Diagrama guardado: " + pumlOut.toAbsolutePath());
+            System.out.println("  [OK] Diagrama guardado: " + pumlOut.toAbsolutePath());
 
             // Intentar renderizar SVG (si PlantUML lo permite sin GraphViz)
             try {
                 Path svgOut = Paths.get("build/tucantrace-diagram.svg");
                 java.nio.file.Files.createDirectories(svgOut.getParent());
                 java.nio.file.Files.writeString(svgOut, generator.generateSVG(plantUML));
-                System.out.println("  ✅ SVG renderizado: " + svgOut.toAbsolutePath());
+                System.out.println("  [OK] SVG renderizado: " + svgOut.toAbsolutePath());
             } catch (Throwable t) {
-                System.out.println("  ⚠️ No se pudo renderizar SVG (¿falta GraphViz?): " + t.getMessage());
+                System.out.println("  [!] No se pudo renderizar SVG: " + t.getMessage());
             }
 
             rootPackage = commonPackagePrefix(classes);
 
         } catch (Exception e) {
-            System.err.println("❌ Error en análisis estático: " + e.getMessage());
+            System.err.println("[X] Error en analisis estatico: " + e.getMessage());
             e.printStackTrace();
             return;
         }
 
-        // 3. Modo JDI (opcional)
+        // 3. Visor en navegador (--live) o trazado por consola (--jdi)
+        if (live) {
+            runLiveViewer(plantUML, rootPackage, host, port, httpPort, delay, execMain, execCp, keepAlive);
+            return;
+        }
+
         if (!enableJDI) {
-            System.out.println("\n💡 Tip: usa '--jdi' para ver la ejecución en vivo (requiere la JVM objetivo en modo debug).");
+            System.out.println("\nTip: usa '--jdi' para trazar en consola, o '--live' para el visor en el navegador.");
             System.out.println("\n=========================================================");
-            System.out.println("  TUCANTRACE - Análisis estático finalizado              ");
+            System.out.println("  TUCANTRACE - Analisis estatico finalizado             ");
             System.out.println("=========================================================");
             return;
         }
 
-        System.out.println("\n--- 2. Conexión JDI en vivo (filtro: " + rootPackage + ".*) ---");
+        System.out.println("\n--- 2. Conexion JDI en vivo (filtro: " + rootPackage + ".*) ---");
         try (JDIClient client = new JDIClient(host, port, rootPackage)) {
             client.connect();
             System.out.println("  Escuchando eventos... (Ctrl+C para salir)\n");
@@ -126,14 +149,74 @@ public class Main {
             System.out.println("\n  Total eventos capturados: " + count);
 
         } catch (Exception e) {
-            System.err.println("❌ Error JDI: " + e.getMessage());
-            System.err.println("   Verifica que la JVM objetivo esté corriendo con:");
+            System.err.println("[X] Error JDI: " + e.getMessage());
+            System.err.println("   Verifica que la JVM objetivo este corriendo con:");
             System.err.println("   -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=" + port);
         }
 
         System.out.println("\n=========================================================");
         System.out.println("  TUCANTRACE - Demo finalizado                           ");
         System.out.println("=========================================================");
+    }
+
+    /**
+     * Visor en vivo: sirve el diagrama, lanza el programa objetivo y transmite
+     * los eventos JDI y la salida del programa en dos pestañas del navegador.
+     */
+    private static void runLiveViewer(String plantUML, String rootPackage,
+                                      String host, int jdiPort, int httpPort, long delay,
+                                      String execMain, String execCp, long keepAlive) {
+        System.out.println("\n--- 2. Visor en vivo (navegador) ---");
+        if (execMain == null) {
+            System.err.println("[X] El modo --live requiere --exec <clase> [--exec-cp <cp>].");
+            return;
+        }
+        try {
+            PlantUMLGenerator generator = new PlantUMLGenerator();
+            String svg = generator.generateSVG(plantUML);
+
+            LiveSession session = new LiveSession(svg, httpPort, delay);
+            try {
+                LiveController controller = new LiveController(
+                        session, host, jdiPort, rootPackage, execMain, execCp);
+                session.setRunHandler(controller::ejecutarAsync);
+
+                System.out.println("  Programa  : " + execMain + "  [cp: " + execCp + "]");
+                System.out.println("  Visor UML : " + session.getUrl());
+                System.out.println("  Terminal  : " + session.getUrlTerminal());
+                session.abrirDosPestanas();
+
+                // Esperar al navegador (hasta 12s)
+                for (int i = 0; i < 48 && !session.hayNavegador(); i++) {
+                    Thread.sleep(250);
+                }
+                System.out.println(session.hayNavegador()
+                        ? "  [OK] Navegador conectado."
+                        : "  [!] Sin navegador; se transmite igual.");
+
+                // Primera ejecucion
+                controller.ejecutarAsync();
+
+                // Mantener el servidor vivo para re-ejecutar desde el navegador
+                System.out.println("\n  [OK] Servidor activo. Usa el boton 'Ejecutar de nuevo' en la terminal.");
+                if (keepAlive <= 0) {
+                    System.out.println("  Ctrl+C para salir.\n");
+                    while (true) {
+                        Thread.sleep(1000);
+                    }
+                } else {
+                    System.out.println("  Se cerrara en " + keepAlive + "s.\n");
+                    Thread.sleep(keepAlive * 1000);
+                }
+            } finally {
+                session.close();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            System.err.println("[X] Error en el visor: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**

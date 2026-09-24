@@ -159,6 +159,13 @@ public class JDIClient implements AutoCloseable {
     }
 
     /**
+     * Obtiene el siguiente evento sin bloquear (o {@code null} si no hay).
+     */
+    public JDIEvent pollEventNow() {
+        return eventQueue.poll();
+    }
+
+    /**
      * Indica si la JVM objetivo terminó o se desconectó.
      */
     public boolean isTerminated() {
@@ -172,19 +179,72 @@ public class JDIClient implements AutoCloseable {
     @Override
     public void close() {
         running = false;
-        if (vm != null) {
-            vm.dispose();
+        try {
+            if (vm != null) {
+                vm.dispose();
+            }
+        } catch (Exception ignored) {
+            // La VM ya pudo haberse desconectado; no es un error.
         }
     }
 
     /**
-     * Encapsula un evento JDI con helpers de tipo.
+     * Encapsula un evento JDI.
+     * <p>
+     * IMPORTANTE: toda la información (nombres, valor, descripción) se captura
+     * en el constructor, mientras la VM objetivo está viva. Así no se hacen
+     * consultas JDI después de que la VM se desconecta (lo que lanzaría
+     * {@code VMDisconnectedException}).
+     * </p>
      */
     public static class JDIEvent {
         private final Event event;
+        private final String kind;
+        private final String className;
+        private final String memberName;
+        private final String valueText;
+        private final String describe;
 
         public JDIEvent(Event event) {
             this.event = event;
+            String k = "OTHER";
+            String cn = "";
+            String mn = "";
+            String vt = "";
+            String de = "[...] " + event.getClass().getSimpleName();
+            try {
+                if (event instanceof MethodEntryEvent e) {
+                    Method m = e.method();
+                    k = "ENTER";
+                    cn = simpleName(m.declaringType().name());
+                    mn = m.name();
+                    de = "[ENTER] " + m.declaringType().name() + "." + m.name() + "()";
+                } else if (event instanceof MethodExitEvent e) {
+                    Method m = e.method();
+                    k = "EXIT";
+                    cn = simpleName(m.declaringType().name());
+                    mn = m.name();
+                    de = "[EXIT]  " + m.declaringType().name() + "." + m.name() + "()";
+                } else if (event instanceof ModificationWatchpointEvent e) {
+                    Field f = e.field();
+                    k = "FIELD";
+                    cn = simpleName(f.declaringType().name());
+                    mn = f.name();
+                    vt = valueToString(f, e.valueToBe());
+                    de = "[CAMPO] " + f.declaringType().name() + "." + f.name() + " = " + vt;
+                } else if (event instanceof ClassPrepareEvent e) {
+                    k = "CLASS";
+                    cn = simpleName(e.referenceType().name());
+                    de = "[CLASE] " + e.referenceType().name() + " cargada";
+                }
+            } catch (Exception ex) {
+                // VM desconectada durante la captura: dejar valores seguros
+            }
+            this.kind = k;
+            this.className = cn;
+            this.memberName = mn;
+            this.valueText = vt;
+            this.describe = de;
         }
 
         public Event getEvent() {
@@ -207,27 +267,51 @@ public class JDIClient implements AutoCloseable {
             return event instanceof ClassPrepareEvent;
         }
 
-        /**
-         * Descripción legible del evento (para el visor / consola).
-         */
+        public String kind() {
+            return kind;
+        }
+
+        public String className() {
+            return className;
+        }
+
+        public String memberName() {
+            return memberName;
+        }
+
+        public String valueText() {
+            return valueText;
+        }
+
         public String describe() {
-            if (event instanceof MethodEntryEvent e) {
-                Method m = e.method();
-                return "[ENTER] " + m.declaringType().name() + "." + m.name() + "()";
+            return describe;
+        }
+
+        /**
+         * Convierte un valor JDI a texto SIN provocar round-trips a la VM.
+         * <p>Evita {@code ObjectReference.toString()} (que consulta la VM).</p>
+         */
+        private static String valueToString(Field field, Value v) {
+            try {
+                if (v == null) {
+                    return "null";
+                }
+                if (v instanceof StringReference sr) {
+                    return "\"" + sr.value() + "\"";
+                }
+                if (v instanceof PrimitiveValue pv) {
+                    return pv.toString();
+                }
+                // Objetos: no llamar toString(); mostrar el tipo declarado del campo
+                return "(" + field.typeName() + ")";
+            } catch (Exception e) {
+                return "?";
             }
-            if (event instanceof MethodExitEvent e) {
-                Method m = e.method();
-                return "[EXIT]  " + m.declaringType().name() + "." + m.name() + "()";
-            }
-            if (event instanceof ModificationWatchpointEvent e) {
-                return "[CAMPO] " + e.field().declaringType().name()
-                        + "." + e.field().name()
-                        + "  =  " + e.valueToBe();
-            }
-            if (event instanceof ClassPrepareEvent e) {
-                return "[CLASE] " + e.referenceType().name() + " cargada";
-            }
-            return "[...] " + event.getClass().getSimpleName();
+        }
+
+        private static String simpleName(String fullName) {
+            int i = fullName.lastIndexOf('.');
+            return i >= 0 ? fullName.substring(i + 1) : fullName;
         }
     }
 }

@@ -4,6 +4,7 @@ import tucantrace.parser.CourseStandardValidator;
 import tucantrace.parser.JavaParserAdapter;
 import tucantrace.parser.PlantUMLGenerator;
 import tucantrace.runtime.JDIClient;
+import tucantrace.ui.LiveSession;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -52,6 +53,7 @@ public class InteractivePrototype {
                 case "3" -> validarEstandares();
                 case "4" -> generarDiagrama();
                 case "5" -> trazarEnVivo();
+                case "6" -> visorEnVivo();
                 case "0", "q", "salir" -> salir = true;
                 default -> System.out.println("\n[!] Opcion no valida.\n");
             }
@@ -78,7 +80,8 @@ public class InteractivePrototype {
         System.out.println("  2. Ver detalle de una clase");
         System.out.println("  3. Validar estandares del curso (Guias 1 y 2)");
         System.out.println("  4. Generar diagrama UML (.puml + .svg)");
-        System.out.println("  5. Trazar ejecucion en vivo (JDI)");
+        System.out.println("  5. Trazar ejecucion en vivo (JDI, consola)");
+        System.out.println("  6. VISOR EN VIVO en el navegador (recomendado)");
         System.out.println("  0. Salir");
         System.out.print("  Opcion > ");
     }
@@ -233,10 +236,90 @@ public class InteractivePrototype {
                     count++;
                 }
             }
+            JDIClient.JDIEvent resto;
+            while ((resto = client.pollEventNow()) != null) {
+                System.out.println("      " + resto.describe());
+                count++;
+            }
             System.out.println("\n      [OK] Trazado finalizado. Total eventos: " + count + "\n");
         } catch (Exception e) {
             System.out.println("[X] Error JDI: " + e.getMessage() + "\n");
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 6. Visor en vivo (navegador)
+    // ------------------------------------------------------------------
+    private void visorEnVivo() {
+        if (!proyectoEsCargado()) return;
+
+        System.out.print("\nPuerto del visor web [8077]: ");
+        String ps = scanner.nextLine().trim();
+        int httpPort = ps.isEmpty() ? 8077 : Integer.parseInt(ps);
+
+        System.out.print("Host JDI [localhost]: ");
+        String host = scanner.nextLine().trim();
+        if (host.isEmpty()) host = "localhost";
+
+        System.out.print("Puerto JDI [5005]: ");
+        String pj = scanner.nextLine().trim();
+        int jdiPort = pj.isEmpty() ? 5005 : Integer.parseInt(pj);
+
+        System.out.print("Retardo por evento en ms (camara lenta) [150]: ");
+        String rd = scanner.nextLine().trim();
+        long delay = rd.isEmpty() ? 150 : Long.parseLong(rd);
+
+        try {
+            String plantUML = generator.generate(clases);
+            String svg = generator.generateSVG(plantUML);
+            String filtro = paqueteComun();
+
+            try (LiveSession session = new LiveSession(svg, httpPort, delay)) {
+                System.out.println("\n[OK] Visor disponible en: " + session.getUrl());
+                session.abrirNavegador();
+                System.out.println("     Abriendo el navegador...");
+
+                // Esperar a que el navegador se conecte al stream (hasta 10s)
+                for (int i = 0; i < 40 && !session.hayNavegador(); i++) {
+                    Thread.sleep(250);
+                }
+                if (!session.hayNavegador()) {
+                    System.out.println("     [!] Ningun navegador conectado; el trazado continuara igual.");
+                } else {
+                    System.out.println("     [OK] Navegador conectado.");
+                }
+
+                System.out.println("     Conectando a JDI " + host + ":" + jdiPort
+                        + " (filtro " + filtro + ".*) ...");
+
+                try (JDIClient client = new JDIClient(host, jdiPort, filtro)) {
+                    client.connect();
+                    System.out.println("     [OK] Trazando en vivo. Mira la pantalla del navegador.\n");
+
+                    int count = 0;
+                    while (!client.isTerminated()) {
+                        JDIClient.JDIEvent ev = client.pollEvent(500);
+                        if (ev != null) {
+                            session.publicar(ev);
+                            count++;
+                        }
+                    }
+                    JDIClient.JDIEvent resto;
+                    while ((resto = client.pollEventNow()) != null) {
+                        session.publicar(resto);
+                        count++;
+                    }
+                    System.out.println("\n     [OK] Ejecucion finalizada. Eventos enviados: " + count);
+                }
+
+                System.out.println("     El visor sigue disponible en " + session.getUrl());
+                System.out.print("     Presiona ENTER para cerrar el visor y volver al menu...");
+                scanner.nextLine();
+            }
+        } catch (Exception e) {
+            System.out.println("[X] Error en el visor en vivo: " + e.getMessage() + "\n");
+        }
+        System.out.println();
     }
 
     // ------------------------------------------------------------------

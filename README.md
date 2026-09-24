@@ -180,6 +180,74 @@ Start-Process $java -ArgumentList @(
 
 ---
 
+## 🔴 Visor UML en vivo en el navegador (dos pestañas) — NUEVO
+
+Ejecuta el programa del estudiante y **lo visualiza en vivo** en el navegador:
+
+- **Pestaña 1 — Visor UML** (`/`): el diagrama de clases con **resaltado en tiempo real**
+  de la clase, el método y el atributo que se están ejecutando.
+- **Pestaña 2 — Terminal** (`/terminal`): la **salida del programa** en vivo, con un botón
+  **"Ejecutar de nuevo"** para re-correrlo cuantas veces quieras (sin reiniciar nada).
+
+### Cómo ejecutarlo
+
+```powershell
+# Compilar TucanTrace
+.\scripts\ant.ps1 compile
+
+# Compilar el programa objetivo (caso de prueba)
+& "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot\bin\javac.exe" -encoding UTF-8 `
+   -d "build/case-study-classes" (Get-ChildItem -Recurse -Filter *.java "case-study\tucango-model\src").FullName
+
+# Lanzar el visor en vivo (abre dos pestañas en el navegador)
+& "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot\bin\java.exe" `
+   "-Dfile.encoding=UTF-8" "-cp" "build/classes;lib/*" `
+   tucantrace.Main --live --delay 120 --http-port 8077 --port 5005 `
+   --exec co.edu.uniamazonia.logica2.Main --exec-cp build/case-study-classes
+```
+
+### Opciones de `--live`
+
+| Opción | Default | Descripción |
+|--------|---------|-------------|
+| `--live` | — | Activa el visor en navegador (abre 2 pestañas) |
+| `--exec <clase>` | — | Clase principal del programa a ejecutar |
+| `--exec-cp <cp>` | — | Classpath del programa a ejecutar |
+| `--delay <ms>` | 150 | Retardo por evento (cámara lenta, para que se vea) |
+| `--http-port <n>` | 8077 | Puerto del servidor local |
+| `--port <n>` | 5005 | Puerto JDWP (debug) del programa |
+| `--keep-alive <s>` | -1 | Segundos antes de cerrar; `-1` = no cerrar nunca |
+
+### Qué se ve
+
+```
+Pestaña 1 (UML)                        Pestaña 2 (Terminal)
++------------------------+             +----------------------------------+
+|  [Estudiante]          |             | === TUCANGO v5.0 ===             |
+|  [Motorista] <--- activo|             | Viaje creado: VIA-1              |
+|  [Viaje]  <-- calcular  |             | Motorista acepta viaje: SI       |
+|  ...                   |             | ...                              |
++------------------------+             +----------------------------------+
+        ^ resaltado en vivo                    ^ salida real del programa
+```
+
+### Arquitectura del visor
+
+```
+[Programa del estudiante] --(JDWP)--> [JDI] --> [EventBus] --> [LiveServer] --(SSE)--> [Navegador]
+        |                                                           |
+        +--(stdout)--> [TargetLauncher] --> (kind "OUT") -----------+
+```
+
+- **Sin dependencias externas**: usa `com.sun.net.httpserver` (JDK) + Server-Sent Events.
+- **Sin modificar el código del estudiante**: se observa vía JDI.
+- **Re-ejecutable**: el botón llama a `GET /run`, que relanza el programa y reconecta JDI.
+
+> **Verificado (24/09/2026)**: 2 ejecuciones consecutivas, ~394 eventos cada una
+> (`ENTER`/`EXIT`/`FIELD`), salida del programa en la terminal, sin errores.
+
+---
+
 ## 🖥️ Prototipo interactivo (scanner + menú) — NUEVO
 
 Clase `tucantrace.InteractivePrototype`: menú por consola que permite usar el **scanner** de código paso a paso.
