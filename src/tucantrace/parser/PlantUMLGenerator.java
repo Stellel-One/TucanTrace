@@ -102,20 +102,28 @@ public class PlantUMLGenerator {
      * Genera PNG desde el texto PlantUML.
      */
     public byte[] generatePNG(String plantUML) {
-        SourceStringReader reader = new SourceStringReader(plantUML);
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        String desc = reader.outputImage(os).getDescription();
-        return os.toByteArray();
+        try {
+            SourceStringReader reader = new SourceStringReader(plantUML);
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            reader.outputImage(os).getDescription();
+            return os.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException("Error generando PNG con PlantUML", e);
+        }
     }
 
     /**
      * Genera SVG desde el texto PlantUML.
      */
     public String generateSVG(String plantUML) {
-        SourceStringReader reader = new SourceStringReader(plantUML);
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        String desc = reader.generateImage(os, new FileFormatOption(FileFormat.SVG));
-        return new String(os.toByteArray(), StandardCharsets.UTF_8);
+        try {
+            SourceStringReader reader = new SourceStringReader(plantUML);
+            ByteArrayOutputStream os = new ByteArrayOutputStream();
+            reader.generateImage(os, new FileFormatOption(FileFormat.SVG));
+            return new String(os.toByteArray(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException("Error generando SVG con PlantUML", e);
+        }
     }
 
     /**

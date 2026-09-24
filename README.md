@@ -125,6 +125,61 @@ ant clean
 
 ---
 
+## ✅ Estado verificado (MVP funcional)
+
+Probado el **23/09/2026** con JDK 21:
+
+| Componente | Estado | Evidencia |
+|------------|--------|-----------|
+| Compilación | ✅ | `javac -encoding UTF-8 -cp "lib/*" -d build/classes src/...` → exit 0 |
+| Parseo estático | ✅ | 12 clases de TucanGo detectadas (atributos, métodos, herencia) |
+| Generación PlantUML | ✅ | `build/tucantrace-diagram.puml` (5.7 KB) |
+| Render SVG | ✅ | `build/tucantrace-diagram.svg` (50 KB) — sin GraphViz (motor Smetana) |
+| Conexión JDI | ✅ | attach a `127.0.0.1:5005` |
+| Eventos en vivo | ✅ | `ClassPrepare`, `MethodEntry`, `MethodExit`, `ModificationWatchpoint` con valores |
+
+### Comandos verificados (CLI, sin Ant)
+
+```powershell
+cd TucanTrace
+$javac = "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot\bin\javac.exe"
+$java  = "C:\Program Files\Microsoft\jdk-21.0.12.101-hotspot\bin\java.exe"
+
+# 1. Compilar TucanTrace
+$srcs = Get-ChildItem -Recurse -Filter *.java -Path "src" | ForEach-Object { $_.FullName }
+& $javac -encoding UTF-8 -cp "lib/*" -d "build/classes" $srcs
+
+# 2. Modo estático: código → UML
+& $java "-Dfile.encoding=UTF-8" "-cp" "build/classes;lib/*" "tucantrace.Main"
+
+# 3. Modo en vivo (JDI):
+#    3a. Compilar el caso de prueba
+& $javac -encoding UTF-8 -d "build/case-study-classes" `
+    (Get-ChildItem -Recurse -Filter *.java "case-study\tucango-model\src").FullName
+#    3b. Lanzar el objetivo en modo debug (espera al debugger)
+Start-Process $java -ArgumentList @(
+    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=*:5005",
+    "-Dfile.encoding=UTF-8", "-cp", "build/case-study-classes",
+    "co.edu.uniamazonia.logica2.Main") -WindowStyle Hidden
+#    3c. Adjuntar TucanTrace
+& $java "-Dfile.encoding=UTF-8" "-cp" "build/classes;lib/*" "tucantrace.Main" "--jdi" "--host" "127.0.0.1"
+```
+
+### Salida en vivo (muestra real)
+
+```
+▶ ENTER  co.edu.uniamazonia.logica2.modelo.Estudiante.<init>()
+▶ ENTER  co.edu.uniamazonia.logica2.modelo.Persona.<init>()
+✎ CAMPO  co.edu.uniamazonia.logica2.modelo.Persona.identificacion  →  "1117540001"
+✎ CAMPO  co.edu.uniamazonia.logica2.modelo.Persona.nombre  →  "Gian Marco Castañeda"
+◀ EXIT   co.edu.uniamazonia.logica2.modelo.Persona.<init>()
+✎ CAMPO  co.edu.uniamazonia.logica2.modelo.Estudiante.codigoEstudiantil  →  "EST-2026-042"
+```
+
+> **Nota Windows:** si el puerto 5005 no responde, usar `address=*:5005` (todas las interfaces) y conectarse con `--host 127.0.0.1`. El `address=5005` solo puede quedar en el loopback IPv6 y dar `Connection refused`.
+
+---
+
 ## 🔧 Configuración de ejecución en NetBeans (para el agente)
 
 En `Project Properties → Run → VM Options` agregar:
